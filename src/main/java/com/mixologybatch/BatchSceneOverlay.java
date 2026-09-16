@@ -4,11 +4,14 @@ import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.Graphics2D;
+import java.util.Map;
+import java.util.Optional;
 import javax.inject.Inject;
 import net.runelite.api.Client;
 import net.runelite.api.Perspective;
 import net.runelite.api.Point;
 import net.runelite.api.TileObject;
+import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.overlay.Overlay;
 import net.runelite.client.ui.overlay.OverlayLayer;
 import net.runelite.client.ui.overlay.OverlayPosition;
@@ -19,9 +22,13 @@ final class BatchSceneOverlay extends Overlay
 	private static final Color VESSEL_COLOR = Color.WHITE;
 	private static final Color COMPLETE_COLOR = new Color(0, 255, 90);
 	private static final Color NEXT_RECIPE_COLOR = new Color(150, 150, 150);
+	private static final Color UNKNOWN_COLOR = new Color(255, 190, 70);
+	private static final Color NO_MATCH_COLOR = new Color(150, 150, 150);
 	private static final int MARKER_OFFSET = -22;
 	private static final int CURRENT_RECIPE_OFFSET = 0;
 	private static final int NEXT_RECIPE_OFFSET = 20;
+	private static final int SUMMARY_LINE_HEIGHT = 12;
+	private static final int DEPOSIT_SUMMARY_OFFSET = 18;
 
 	private final Client client;
 	private final MixologyBatchPlugin plugin;
@@ -55,6 +62,7 @@ final class BatchSceneOverlay extends Overlay
 		}
 
 		Guidance guidance = plugin.getGuidance();
+		renderPotionSummary(graphics, guidance);
 		if (guidance.getPhase() == Guidance.Phase.MIXING)
 		{
 			renderMixingRecipe(
@@ -91,6 +99,103 @@ final class BatchSceneOverlay extends Overlay
 
 		drawTarget(graphics, target, label, color);
 		return null;
+	}
+
+	private void renderPotionSummary(Graphics2D graphics, Guidance guidance)
+	{
+		PotionSummaryDisplay display = config.potionSummaryDisplay();
+		if (display == PotionSummaryDisplay.HIDDEN || !plugin.isInventoryAvailable())
+		{
+			return;
+		}
+
+		Map<Integer, FinishedPotion> finishedPotions = plugin.getFinishedPotions();
+		boolean depositPhase = guidance.getAction() == Guidance.Action.DEPOSIT;
+		if (finishedPotions.isEmpty() && !depositPhase)
+		{
+			return;
+		}
+
+		TileObject conveyor = objects.find(LabObject.CONVEYOR);
+		if (conveyor == null)
+		{
+			return;
+		}
+
+		Font previousFont = graphics.getFont();
+		Color previousColor = graphics.getColor();
+		try
+		{
+			graphics.setFont(sceneHintFont(graphics));
+			int lineHeight = Math.max(SUMMARY_LINE_HEIGHT, graphics.getFontMetrics().getHeight());
+			int offset = depositPhase ? Math.max(DEPOSIT_SUMMARY_OFFSET, lineHeight) : 0;
+			if (display.showsCount())
+			{
+				drawSummaryLine(graphics, conveyor, "Potions: " + finishedPotions.size(), Color.WHITE, offset);
+				offset += lineHeight;
+			}
+			if (display.showsFulfillment())
+			{
+				Optional<OrderFulfillment.Status> status = plugin.getOrderFulfillment();
+				if (status.isPresent())
+				{
+					drawSummaryLine(
+						graphics,
+						conveyor,
+						"Order: " + status.get().getDisplayName(),
+						statusColor(status.get()),
+						offset);
+				}
+			}
+		}
+		finally
+		{
+			graphics.setFont(previousFont);
+			graphics.setColor(previousColor);
+		}
+	}
+
+	private Font sceneHintFont(Graphics2D graphics)
+	{
+		switch (config.sceneHintFont())
+		{
+			case RUNESCAPE:
+				return FontManager.getRunescapeFont();
+			case RUNESCAPE_SMALL:
+				return FontManager.getRunescapeSmallFont();
+			case RUNESCAPE_BOLD:
+				return FontManager.getRunescapeBoldFont();
+			default:
+				return graphics.getFont().deriveFont(Font.BOLD, 16f);
+		}
+	}
+
+	private void drawSummaryLine(Graphics2D graphics, TileObject object, String text, Color color, int verticalOffset)
+	{
+		Point location = Perspective.getCanvasTextLocation(client, graphics, object.getLocalLocation(), text, 120);
+		if (location == null)
+		{
+			return;
+		}
+
+		int y = location.getY() + verticalOffset;
+		graphics.setColor(Color.BLACK);
+		graphics.drawString(text, location.getX() + 1, y + 1);
+		graphics.setColor(color);
+		graphics.drawString(text, location.getX(), y);
+	}
+
+	private static Color statusColor(OrderFulfillment.Status status)
+	{
+		switch (status)
+		{
+			case READY:
+				return COMPLETE_COLOR;
+			case UNKNOWN:
+				return UNKNOWN_COLOR;
+			default:
+				return NO_MATCH_COLOR;
+		}
 	}
 
 	private void renderPermanentLeverMarkers(Graphics2D graphics)
@@ -183,7 +288,18 @@ final class BatchSceneOverlay extends Overlay
 			return;
 		}
 		outliner.drawOutline(object, config.outlineWidth(), color, config.outlineFeather());
-		drawLabel(graphics, object, label, color, 0);
+		Font previousFont = graphics.getFont();
+		Color previousColor = graphics.getColor();
+		try
+		{
+			graphics.setFont(sceneHintFont(graphics));
+			drawSummaryLine(graphics, object, label, color, 0);
+		}
+		finally
+		{
+			graphics.setFont(previousFont);
+			graphics.setColor(previousColor);
+		}
 	}
 
 	private static String stationLabel(BatchEntry entry, boolean active)
@@ -199,7 +315,7 @@ final class BatchSceneOverlay extends Overlay
 		Color color,
 		int verticalOffset)
 	{
-		graphics.setFont(graphics.getFont().deriveFont(Font.BOLD, 16f));
+		graphics.setFont(sceneHintFont(graphics));
 		Point location = Perspective.getCanvasTextLocation(client, graphics, object.getLocalLocation(), text, 120);
 		if (location == null)
 		{

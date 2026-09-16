@@ -8,17 +8,16 @@ import java.util.Deque;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import javax.inject.Inject;
 import net.runelite.api.Client;
-import net.runelite.api.Item;
-import net.runelite.api.ItemContainer;
+import net.runelite.api.KeyCode;
 import net.runelite.api.Menu;
 import net.runelite.api.MenuAction;
 import net.runelite.api.MenuEntry;
 import net.runelite.api.Player;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
-import net.runelite.api.events.ItemContainerChanged;
 import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.api.events.PostMenuSort;
 import net.runelite.api.events.WidgetClosed;
@@ -29,6 +28,7 @@ import net.runelite.api.gameval.VarbitID;
 import net.runelite.api.widgets.Widget;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
+import net.runelite.client.eventbus.EventBus;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.plugins.Plugin;
@@ -51,6 +51,9 @@ public class MixologyBatchPlugin extends Plugin
 	private ClientThread clientThread;
 
 	@Inject
+	private EventBus eventBus;
+
+	@Inject
 	private MixologyBatchConfig config;
 
 	@Inject
@@ -67,6 +70,12 @@ public class MixologyBatchPlugin extends Plugin
 
 	@Inject
 	private BatchQueueOverlay queueOverlay;
+
+	@Inject
+	private PotionOrderMonitor potionOrderMonitor;
+
+	@Inject
+	private OrderWidgetHighlighter orderWidgetHighlighter;
 
 	private final BatchStateResolver resolver = new BatchStateResolver();
 	private BatchPlan plan = BatchPlan.defaultPlan();
@@ -87,6 +96,8 @@ public class MixologyBatchPlugin extends Plugin
 	@Override
 	protected void startUp()
 	{
+		eventBus.register(potionOrderMonitor);
+		eventBus.register(orderWidgetHighlighter);
 		overlayManager.add(panelOverlay);
 		overlayManager.add(sceneOverlay);
 		overlayManager.add(inventoryOverlay);
@@ -103,6 +114,9 @@ public class MixologyBatchPlugin extends Plugin
 		overlayManager.remove(inventoryOverlay);
 		overlayManager.remove(queueOverlay);
 		deactivateLab();
+		orderWidgetHighlighter.deactivate();
+		eventBus.unregister(orderWidgetHighlighter);
+		eventBus.unregister(potionOrderMonitor);
 	}
 
 	@Subscribe
@@ -110,27 +124,38 @@ public class MixologyBatchPlugin extends Plugin
 	{
 		gameTickCounter++;
 		updateState();
-	}
-
-	@Subscribe
-	public void onItemContainerChanged(ItemContainerChanged event)
-	{
-		if (inLab && event.getContainerId() == InventoryID.INV)
-		{
-			clientThread.invokeLater(this::updateState);
-		}
+		potionOrderMonitor.finishTick();
 	}
 
 	@Subscribe
 	public void onPostMenuSort(PostMenuSort event)
 	{
-		if (!inLab || !config.guardWrongStations() || client.isMenuOpen())
+		if (!inLab || client.isMenuOpen())
 		{
 			return;
 		}
 
 		Menu menu = client.getMenu();
 		MenuEntry[] entries = menu.getMenuEntries();
+		boolean changed = false;
+		if (!client.isWidgetSelected()
+			&& !client.isKeyPressed(KeyCode.KC_SHIFT))
+		{
+			changed = InspectMenuSwapper.promoteInspect(
+				entries, config.leftClickInspect(), getFinishedPotions());
+		}
+		if (config.guardWrongStations())
+		{
+			changed = guardWrongStation(entries) || changed;
+		}
+		if (changed)
+		{
+			menu.setMenuEntries(entries);
+		}
+	}
+
+	private boolean guardWrongStation(MenuEntry[] entries)
+	{
 		StationMenuGuard.MenuScan scan = new StationMenuGuard.MenuScan();
 
 		for (int i = 0; i < entries.length; i++)
@@ -148,13 +173,13 @@ public class MixologyBatchPlugin extends Plugin
 		StationMenuGuard.MenuSwap swap = scan.select();
 		if (swap == null || canUseStation(swap.getStation()))
 		{
-			return;
+			return false;
 		}
 
 		MenuEntry processingEntry = entries[swap.getProcessingIndex()];
 		entries[swap.getProcessingIndex()] = entries[swap.getCheckIndex()];
 		entries[swap.getCheckIndex()] = processingEntry;
-		menu.setMenuEntries(entries);
+		return true;
 	}
 
 	@Subscribe
@@ -200,6 +225,7 @@ public class MixologyBatchPlugin extends Plugin
 		{
 			case LOGIN_SCREEN:
 			case HOPPING:
+			case CONNECTION_LOST:
 				deactivateLab();
 				break;
 			default:
@@ -261,6 +287,10 @@ public class MixologyBatchPlugin extends Plugin
 		{
 			deactivateLab();
 			return;
+		}
+		if (!wasInLab)
+		{
+			potionOrderMonitor.activate(this::updateState);
 		}
 
 		List<InventorySlot> inventory = readInventory();
@@ -584,21 +614,8 @@ public class MixologyBatchPlugin extends Plugin
 
 	private List<InventorySlot> readInventory()
 	{
-		List<InventorySlot> result = new ArrayList<>(BatchPlan.INVENTORY_SIZE);
-		ItemContainer container = client.getItemContainer(InventoryID.INV);
-		Item[] items = container == null ? null : container.getItems();
-		for (int slot = 0; slot < BatchPlan.INVENTORY_SIZE; slot++)
-		{
-			if (items == null || slot >= items.length || items[slot] == null)
-			{
-				result.add(InventorySlot.empty());
-			}
-			else
-			{
-				result.add(InventorySlot.fromItemId(items[slot].getId()));
-			}
-		}
-		return result;
+		return InventorySlot.fromContainer(
+			client.getItemContainer(InventoryID.INV), BatchPlan.INVENTORY_SIZE);
 	}
 
 	private boolean isPlayerInMixologyRoom()
@@ -615,6 +632,7 @@ public class MixologyBatchPlugin extends Plugin
 	private void deactivateLab()
 	{
 		inLab = false;
+		potionOrderMonitor.deactivate();
 		cyclePlan = null;
 		partialProcessingStation = null;
 		currentPotionCounts.clear();
@@ -626,6 +644,26 @@ public class MixologyBatchPlugin extends Plugin
 	boolean isInLab()
 	{
 		return inLab;
+	}
+
+	boolean isInventoryAvailable()
+	{
+		return potionOrderMonitor.isInventoryAvailable();
+	}
+
+	Map<Integer, FinishedPotion> getFinishedPotions()
+	{
+		return potionOrderMonitor.getFinishedPotions();
+	}
+
+	List<OrderFulfillment.Order> getCurrentOrders()
+	{
+		return potionOrderMonitor.getCurrentOrders();
+	}
+
+	Optional<OrderFulfillment.Status> getOrderFulfillment()
+	{
+		return potionOrderMonitor.getOrderFulfillment();
 	}
 
 	Guidance getGuidance()

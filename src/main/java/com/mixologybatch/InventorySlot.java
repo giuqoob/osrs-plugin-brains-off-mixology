@@ -1,5 +1,10 @@
 package com.mixologybatch;
 
+import java.util.ArrayList;
+import java.util.List;
+import net.runelite.api.Item;
+import net.runelite.api.ItemContainer;
+
 final class InventorySlot
 {
 	private final boolean empty;
@@ -30,6 +35,24 @@ final class InventorySlot
 		return new InventorySlot(false, itemId, potion, potion != null && potion.isFinishedItem(itemId));
 	}
 
+	static List<InventorySlot> fromContainer(ItemContainer container, int size)
+	{
+		List<InventorySlot> result = new ArrayList<>(size);
+		Item[] items = container == null ? null : container.getItems();
+		for (int slot = 0; slot < size; slot++)
+		{
+			if (items == null || slot >= items.length || items[slot] == null)
+			{
+				result.add(empty());
+			}
+			else
+			{
+				result.add(fromItemId(items[slot].getId()));
+			}
+		}
+		return result;
+	}
+
 	boolean isEmpty()
 	{
 		return empty;
@@ -55,4 +78,3 @@ final class InventorySlot
 		return finished;
 	}
 }
-

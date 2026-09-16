@@ -168,13 +168,37 @@ public interface MixologyBatchConfig extends Config
 		return true;
 	}
 
+	@ConfigItem(
+		section = DISPLAY,
+		keyName = "leftClickInspect",
+		name = "Left-click Inspect",
+		description = "Choose which finished potions promote their existing Inspect action to left-click",
+		position = 5
+	)
+	default InspectMode leftClickInspect()
+	{
+		return InspectMode.OFF;
+	}
+
+	@ConfigItem(
+		section = DISPLAY,
+		keyName = "highlightFulfillableOrders",
+		name = "Highlight fulfillable orders",
+		description = "Colour order names green when a matching finished potion is ready to deliver",
+		position = 6
+	)
+	default boolean highlightFulfillableOrders()
+	{
+		return true;
+	}
+
 	@Alpha
 	@ConfigItem(
 		section = DISPLAY,
 		keyName = "stationColor",
 		name = "Station highlight",
 		description = "Colour used for station outlines and the active inventory slot",
-		position = 5
+		position = 7
 	)
 	default Color stationColor()
 	{
@@ -187,7 +211,7 @@ public interface MixologyBatchConfig extends Config
 		keyName = "outlineWidth",
 		name = "Outline width",
 		description = "Width of scene-object outlines",
-		position = 6
+		position = 8
 	)
 	default int outlineWidth()
 	{
@@ -200,10 +224,58 @@ public interface MixologyBatchConfig extends Config
 		keyName = "outlineFeather",
 		name = "Outline feather",
 		description = "Softness of scene-object outlines",
-		position = 7
+		position = 9
 	)
 	default int outlineFeather()
 	{
 		return 1;
+	}
+
+	@ConfigItem(
+		section = DISPLAY,
+		keyName = "sceneHintFont",
+		name = "Scene font",
+		description = "Font for all scene hints, including lever letters and recipe numbers",
+		position = 20
+	)
+	default SceneHintFont sceneHintFont()
+	{
+		return SceneHintFont.DEFAULT;
+	}
+
+	@ConfigItem(
+		section = DISPLAY,
+		keyName = "potionSummaryDisplay",
+		name = "Potion summary",
+		description = "Show the finished-potion count, fulfillable order status, both, or neither at the conveyor and in the panel",
+		position = 21
+	)
+	default PotionSummaryDisplay potionSummaryDisplay()
+	{
+		return PotionSummaryDisplay.BOTH;
+	}
+
+	@ConfigItem(
+		section = DISPLAY,
+		keyName = "markUnknownProcessingType",
+		name = "Mark unknown processing type",
+		description = "Mark finished potions whose processing type has not been identified",
+		position = 22
+	)
+	default boolean markUnknownProcessingType()
+	{
+		return false;
+	}
+
+	@ConfigItem(
+		section = DISPLAY,
+		keyName = "showProcessingDetailsOnHover",
+		name = "Show processing details on hover",
+		description = "Show a finished potion's processing type while hovering over it",
+		position = 23
+	)
+	default boolean showProcessingDetailsOnHover()
+	{
+		return false;
 	}
 }

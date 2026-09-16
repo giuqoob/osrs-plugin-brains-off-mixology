@@ -3,7 +3,11 @@ plugins {
 }
 
 repositories {
-	mavenLocal()
+	mavenLocal {
+		content {
+			excludeGroup('org.lwjgl')
+		}
+	}
 	maven {
 		url = 'https://repo.runelite.net'
 		content {
@@ -24,10 +28,20 @@ dependencies {
 }
 
 group = 'com.mixologybatch'
-version = '1.0.0'
+version = '1.1.0'
 
 tasks.withType(JavaCompile).configureEach {
 	options.encoding = 'UTF-8'
 	options.release.set(11)
 }
 
+
+tasks.register('run', JavaExec) {
+	group = 'application'
+	description = 'Launch RuneLite with the local Mixology plugin and developer tools.'
+	dependsOn testClasses
+	classpath = sourceSets.test.runtimeClasspath
+	mainClass = 'com.mixologybatch.MixologyBatchPluginTest'
+	enableAssertions = true
+	args '--developer-mode', '--debug'
+}

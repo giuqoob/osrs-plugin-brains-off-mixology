@@ -100,6 +100,22 @@ Existing potions are carried into the next plan:
 
 During delivery, Mixalot potions are ignored for the automatic refill threshold. A new mixing queue begins when only Mixalots plus at most two other processed potions remain. This lets the next inventory start before every useful leftover has disappeared.
 
+## Finished potions and order fulfillment
+
+The panel and conveyor can show `Potions: X`, the current order-fulfillment status, both, or neither. **Potion summary** offers `Hidden`, `Count`, `Fulfillment`, and `Both`, with `Both` as the default. The batch number remains planning guidance: it identifies the station assigned by the inventory plan, but does not prove that the potion was processed there.
+
+The fulfillment status compares finished potions in your inventory with the three current orders:
+
+- **Ready** means at least one finished potion has a confirmed recipe and processing type matching an order.
+- **Unknown** means there is no confirmed match, but a finished potion has a requested recipe whose processing type has not been identified. Unknown potions for unrelated recipes do not affect the status.
+- **No match** means no finished potion is confirmed to fulfill an order and no unidentified potion has a requested recipe.
+
+The helper can identify processing type by observing a potion complete at a station or by reading the result of a manual **Inspect**. **Left-click Inspect** can promote the game's existing action for `Off`, `Unknown`, or `All` finished potions; it defaults to `Off`. When inspecting several potions with identical descriptions, close the current description before inspecting the next one so RuneLite can observe each result.
+
+**Mark unknown processing type** adds a small dot to unidentified finished potions, and **Show processing details on hover** adds the known type to the item tooltip. These controls are independent and both default to off. **Highlight fulfillable orders** colors individually deliverable order names green and defaults to on.
+
+Processing knowledge is session-local. Logging out, hopping worlds, leaving the laboratory, or restarting the plugin clears it; existing finished potions can be identified again with **Inspect**.
+
 ## Configuring a batch
 
 Set a count from `0` to `28` for each potion. The combined total must be no more than 28.
@@ -134,6 +150,12 @@ You may choose any of the six station orders. **Crystallise > Homogenise > Conce
 | **Number inventory batches** | The `#1`, `#2`, and `#3` markers on inventory potions. |
 | **Show potion queue** | Previous two, current, and next three complete potions. |
 | **Guard wrong stations** | Swaps the existing **Check** entry into left-click position when a station is unavailable. |
+| **Left-click Inspect** | Promotes **Inspect** for `Off`, `Unknown`, or `All` finished potions; defaults to `Off`. |
+| **Highlight fulfillable orders** | Colors order names green when a confirmed matching finished potion is available; enabled by default. |
+| **Scene font** | Choose `Default`, `RuneScape`, `RuneScape Small`, or `RuneScape Bold` for all scene hints, including lever letters and recipe numbers. `Default` retains the previous bold styling using RuneLite's configured font family. |
+| **Potion summary** | Shows `Potions: X`, fulfillment status, both, or neither in the panel and at the conveyor; defaults to `Both`. |
+| **Mark unknown processing type** | Adds a small dot to finished potions whose processing type is unknown; disabled by default. |
+| **Show processing details on hover** | Shows a finished potion's known processing type in its hover tooltip; disabled by default. |
 | **Station highlight** | Color used for processing-station outlines and the active inventory slot. |
 | **Outline width / feather** | Thickness and softness of scene outlines. |
 
