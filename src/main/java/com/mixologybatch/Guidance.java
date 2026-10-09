@@ -18,6 +18,11 @@ final class Guidance
 		PULL_LEVER,
 		MIX_VESSEL,
 		USE_STATION,
+		/**
+		 * Use a specific inventory potion on the station, because left-clicking
+		 * the station would take an earlier unfinished potion instead.
+		 */
+		USE_ITEM_ON_STATION,
 		WAIT_STATION,
 		DEPOSIT
 	}
@@ -80,6 +85,22 @@ final class Guidance
 			null,
 			0,
 			null);
+	}
+
+	static Guidance useItemOnStation(BatchEntry entry)
+	{
+		return new Guidance(Phase.PROCESSING, Action.USE_ITEM_ON_STATION, entry, null, 0, null);
+	}
+
+	/**
+	 * Whether this guidance points at a station the player should use now or is
+	 * already using.
+	 */
+	boolean targetsStation()
+	{
+		return action == Action.USE_STATION
+			|| action == Action.USE_ITEM_ON_STATION
+			|| action == Action.WAIT_STATION;
 	}
 
 	static Guidance complete()

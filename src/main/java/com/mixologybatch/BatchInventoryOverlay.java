@@ -13,6 +13,7 @@ final class BatchInventoryOverlay extends WidgetItemOverlay
 	private static final Color FIRST_BATCH = new Color(80, 220, 255);
 	private static final Color SECOND_BATCH = new Color(255, 210, 70);
 	private static final Color THIRD_BATCH = new Color(255, 110, 230);
+	private static final Color ORDER_POTION = new Color(70, 255, 120);
 
 	private final MixologyBatchPlugin plugin;
 	private final MixologyBatchConfig config;
@@ -45,11 +46,11 @@ final class BatchInventoryOverlay extends WidgetItemOverlay
 		}
 
 		Rectangle bounds = widgetItem.getCanvasBounds();
-		String text = "#" + (entry.getStationOrdinal() + 1);
+		String text = "#" + (entry.getStationOrdinal() + 1) + (entry.isOrderPotion() ? " ORD" : "");
 		graphics.setFont(FontManager.getRunescapeSmallFont());
 		graphics.setColor(Color.BLACK);
 		graphics.drawString(text, bounds.x + 3, bounds.y + 12);
-		graphics.setColor(batchColor(entry.getStationOrdinal()));
+		graphics.setColor(entry.isOrderPotion() ? ORDER_POTION : batchColor(entry.getStationOrdinal()));
 		graphics.drawString(text, bounds.x + 2, bounds.y + 11);
 
 		Guidance guidance = plugin.getGuidance();

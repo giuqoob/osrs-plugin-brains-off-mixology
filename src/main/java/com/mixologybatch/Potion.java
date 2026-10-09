@@ -14,7 +14,7 @@ import static com.mixologybatch.Component.MOX;
  * Recipe codes use the actual guided lever order, hence ALA/MLL/ALL rather
  * than the internal AAL/LLM/LLA item names.
  */
-enum Potion
+public enum Potion
 {
 	MMM("Mammoth-might mix", ItemID.MM_POTION_MMM_UNFINISHED, ItemID.MM_POTION_MMM_FINISHED, MOX, MOX, MOX),
 	MMA("Mystic mana amalgam", ItemID.MM_POTION_MMA_UNFINISHED, ItemID.MM_POTION_MMA_FINISHED, MOX, MOX, AGA),

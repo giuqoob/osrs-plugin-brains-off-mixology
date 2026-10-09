@@ -1,11 +1,14 @@
 package com.mixologybatch;
 
 import java.awt.Color;
+import java.util.EnumSet;
+import java.util.Set;
 import net.runelite.client.config.Alpha;
 import net.runelite.client.config.Config;
 import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigItem;
 import net.runelite.client.config.ConfigSection;
+import net.runelite.client.config.Notification;
 import net.runelite.client.config.Range;
 
 @ConfigGroup(MixologyBatchConfig.GROUP)
@@ -26,6 +29,13 @@ public interface MixologyBatchConfig extends Config
 		position = 20
 	)
 	String DISPLAY = "display";
+
+	@ConfigSection(
+		name = "Orders",
+		description = "Awareness of the three current conveyor orders",
+		position = 30
+	)
+	String ORDERS = "orders";
 
 	@ConfigItem(
 		keyName = "stationOrder",
@@ -181,13 +191,38 @@ public interface MixologyBatchConfig extends Config
 		return new Color(255, 0, 255, 255);
 	}
 
+	@ConfigItem(
+		section = DISPLAY,
+		keyName = "highlightQuickAction",
+		name = "Highlight quick action",
+		description = "Outline the Agitator or Alembic while its quick-action click window is open",
+		position = 6
+	)
+	default boolean highlightQuickAction()
+	{
+		return true;
+	}
+
+	@Alpha
+	@ConfigItem(
+		section = DISPLAY,
+		keyName = "quickActionColor",
+		name = "Quick action color",
+		description = "Colour used for the quick-action station outline",
+		position = 7
+	)
+	default Color quickActionColor()
+	{
+		return Color.GREEN;
+	}
+
 	@Range(min = 1, max = 8)
 	@ConfigItem(
 		section = DISPLAY,
 		keyName = "outlineWidth",
 		name = "Outline width",
 		description = "Width of scene-object outlines",
-		position = 6
+		position = 8
 	)
 	default int outlineWidth()
 	{
@@ -200,10 +235,108 @@ public interface MixologyBatchConfig extends Config
 		keyName = "outlineFeather",
 		name = "Outline feather",
 		description = "Softness of scene-object outlines",
-		position = 7
+		position = 9
 	)
 	default int outlineFeather()
 	{
 		return 1;
+	}
+
+	@ConfigItem(
+		section = DISPLAY,
+		keyName = "highlightDigweed",
+		name = "Highlight Digweed",
+		description = "Outline a Digweed in the lab corner where it has spawned and show its corner in the panel",
+		position = 10
+	)
+	default boolean highlightDigweed()
+	{
+		return true;
+	}
+
+	@Alpha
+	@ConfigItem(
+		section = DISPLAY,
+		keyName = "digweedColor",
+		name = "Digweed color",
+		description = "Colour used for the Digweed outline",
+		position = 11
+	)
+	default Color digweedColor()
+	{
+		return new Color(255, 220, 60);
+	}
+
+	@ConfigItem(
+		section = DISPLAY,
+		keyName = "notifyDigweed",
+		name = "Notify Digweed",
+		description = "Send a RuneLite notification when a Digweed spawns",
+		position = 12
+	)
+	default Notification notifyDigweed()
+	{
+		return Notification.ON;
+	}
+
+	@ConfigItem(
+		section = ORDERS,
+		keyName = "useCurrentOrders",
+		name = "Use current orders",
+		description = "Read the three conveyor orders and show which are ready to deliver. When off, the plugin ignores orders entirely",
+		position = 0
+	)
+	default boolean useCurrentOrders()
+	{
+		return true;
+	}
+
+	@Range(min = 1, max = 3)
+	@ConfigItem(
+		section = ORDERS,
+		keyName = "deliverThreshold",
+		name = "Deliver threshold",
+		description = "Orders that must be fillable before delivering; otherwise refill first. Orders for skipped potions that you can't fill don't count, so the target drops when only fewer orders are possible",
+		position = 1
+	)
+	default int deliverThreshold()
+	{
+		return 1;
+	}
+
+	@ConfigItem(
+		section = ORDERS,
+		keyName = "skipOrderPotions",
+		name = "Skip order potions",
+		description = "Potions never brewed for orders. Their orders are left to be refreshed by a normal deposit",
+		position = 2
+	)
+	default Set<Potion> skipOrderPotions()
+	{
+		return EnumSet.of(Potion.MMM, Potion.AAA);
+	}
+
+	@ConfigItem(
+		section = ORDERS,
+		keyName = "brewCurrentOrders",
+		name = "Brew current orders",
+		description = "When a refill starts, mix potions for current orders the stock can't cover. They go after the stock and are used on their station at the end of its batch",
+		position = 3
+	)
+	default boolean brewCurrentOrders()
+	{
+		return true;
+	}
+
+	@ConfigItem(
+		section = ORDERS,
+		keyName = "guardConveyor",
+		name = "Guard conveyor",
+		description = "Swap the conveyor's Examine option into left-click while a refill is due, so a stray click doesn't deposit. The deposit stays on right-click",
+		position = 4
+	)
+	default boolean guardConveyor()
+	{
+		return false;
 	}
 }

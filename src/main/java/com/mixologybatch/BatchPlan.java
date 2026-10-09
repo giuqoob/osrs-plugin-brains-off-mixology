@@ -5,6 +5,7 @@ import java.util.Collections;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 final class BatchPlan
 {
@@ -12,11 +13,27 @@ final class BatchPlan
 
 	private final List<BatchEntry> entries;
 	private final String error;
+	private final Station[] stations;
+	private final BatchPlan base;
+	private final int droppedOrderCount;
 
 	private BatchPlan(List<BatchEntry> entries, String error)
 	{
+		this(entries, error, new Station[0], null, 0);
+	}
+
+	private BatchPlan(
+		List<BatchEntry> entries,
+		String error,
+		Station[] stations,
+		BatchPlan base,
+		int droppedOrderCount)
+	{
 		this.entries = entries;
 		this.error = error;
+		this.stations = stations;
+		this.base = base == null ? this : base;
+		this.droppedOrderCount = droppedOrderCount;
 	}
 
 	static BatchPlan create(Map<Potion, Integer> counts, StationOrder stationOrder)
@@ -65,7 +82,125 @@ final class BatchPlan
 			}
 		}
 
-		return new BatchPlan(Collections.unmodifiableList(result), null);
+		return new BatchPlan(Collections.unmodifiableList(result), null, stations, null, 0);
+	}
+
+	/**
+	 * Current orders that the configured stock cannot cover, counting duplicate
+	 * orders separately. Skipped potions are never brewed for orders, and
+	 * incomplete order data brews nothing.
+	 */
+	List<PotionOrder> ordersToBrew(List<PotionOrder> orders, Set<Potion> skippedPotions)
+	{
+		List<PotionOrder> result = new ArrayList<>();
+		if (orders.contains(null))
+		{
+			return result;
+		}
+		List<PotionOrder> covering = new ArrayList<>();
+		for (PotionOrder order : orders)
+		{
+			if (skippedPotions.contains(order.getPotion()))
+			{
+				continue;
+			}
+			covering.add(order);
+			if (Collections.frequency(covering, order) > getConfiguredCount(order.getStation(), order.getPotion()))
+			{
+				result.add(order);
+			}
+		}
+		return result;
+	}
+
+	/**
+	 * Appends order potions after all stock, grouped in station order, so the
+	 * stock layout is unchanged. Orders that don't fit in the inventory are
+	 * dropped and counted rather than displacing stock.
+	 */
+	BatchPlan withOrderPotions(List<PotionOrder> orders)
+	{
+		if (!isValid() || orders.isEmpty())
+		{
+			return this;
+		}
+
+		int room = INVENTORY_SIZE - entries.size();
+		List<List<Potion>> extras = new ArrayList<>(stations.length);
+		for (int index = 0; index < stations.length; index++)
+		{
+			extras.add(new ArrayList<>());
+		}
+		int accepted = 0;
+		for (int stationOrdinal = 0; stationOrdinal < stations.length; stationOrdinal++)
+		{
+			for (PotionOrder order : orders)
+			{
+				if (order.getStation() == stations[stationOrdinal] && accepted < room)
+				{
+					extras.get(stationOrdinal).add(order.getPotion());
+					accepted++;
+				}
+			}
+		}
+
+		int[] stockCounts = new int[stations.length];
+		for (BatchEntry entry : entries)
+		{
+			stockCounts[entry.getStationOrdinal()]++;
+		}
+
+		List<BatchEntry> result = new ArrayList<>(entries.size() + accepted);
+		for (BatchEntry entry : entries)
+		{
+			int stationOrdinal = entry.getStationOrdinal();
+			result.add(new BatchEntry(
+				entry.getPotion(),
+				entry.getStation(),
+				entry.getInventorySlot(),
+				stationOrdinal,
+				entry.getStationPosition(),
+				stockCounts[stationOrdinal] + extras.get(stationOrdinal).size()));
+		}
+		int slot = entries.size();
+		for (int stationOrdinal = 0; stationOrdinal < stations.length; stationOrdinal++)
+		{
+			List<Potion> stationExtras = extras.get(stationOrdinal);
+			int stationTotal = stockCounts[stationOrdinal] + stationExtras.size();
+			for (int index = 0; index < stationExtras.size(); index++)
+			{
+				result.add(new BatchEntry(
+					stationExtras.get(index),
+					stations[stationOrdinal],
+					slot++,
+					stationOrdinal,
+					stockCounts[stationOrdinal] + index,
+					stationTotal,
+					true));
+			}
+		}
+		return new BatchPlan(
+			Collections.unmodifiableList(result),
+			null,
+			stations,
+			base,
+			orders.size() - accepted);
+	}
+
+	/**
+	 * The configured stock plan this plan was derived from; itself for a stock plan.
+	 */
+	BatchPlan getBase()
+	{
+		return base;
+	}
+
+	/**
+	 * Orders that needed brewing but did not fit in the inventory.
+	 */
+	int getDroppedOrderCount()
+	{
+		return droppedOrderCount;
 	}
 
 	static BatchPlan defaultPlan()

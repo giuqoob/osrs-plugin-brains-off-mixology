@@ -121,9 +121,47 @@ final class CyclePlan
 		return error;
 	}
 
+	/**
+	 * Whether this cycle was built from the given configured stock plan. Order
+	 * potions are fixed when the cycle is created, so later order changes do not
+	 * rebuild it.
+	 */
 	boolean belongsTo(BatchPlan plan)
 	{
-		return target == plan;
+		return target.getBase() == plan.getBase();
+	}
+
+	BatchPlan getTarget()
+	{
+		return target;
+	}
+
+	/**
+	 * Ranks in processing order: each station's stock batch followed by that
+	 * station's order potions, in station order.
+	 */
+	List<Integer> processingRanks()
+	{
+		List<Integer> ranks = new ArrayList<>(inventorySlots.size());
+		for (int rank = 0; rank < inventorySlots.size(); rank++)
+		{
+			ranks.add(rank);
+		}
+		ranks.sort((left, right) ->
+		{
+			BatchEntry a = target.get(left);
+			BatchEntry b = target.get(right);
+			if (a.getStationOrdinal() != b.getStationOrdinal())
+			{
+				return Integer.compare(a.getStationOrdinal(), b.getStationOrdinal());
+			}
+			if (a.isOrderPotion() != b.isOrderPotion())
+			{
+				return a.isOrderPotion() ? 1 : -1;
+			}
+			return Integer.compare(left, right);
+		});
+		return ranks;
 	}
 
 	boolean containsPotionSlots(List<InventorySlot> inventory)

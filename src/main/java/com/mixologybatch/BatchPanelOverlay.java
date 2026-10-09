@@ -39,6 +39,13 @@ final class BatchPanelOverlay extends OverlayPanel
 		}
 
 		panelComponent.getChildren().add(TitleComponent.builder().text("Brains Off Mixology Helper").build());
+		if (config.highlightDigweed())
+		{
+			for (DigweedSpot spot : plugin.getReadyDigweed())
+			{
+				addLine("Digweed ready", spot.getCornerName(), config.digweedColor());
+			}
+		}
 		Guidance guidance = plugin.getGuidance();
 		switch (guidance.getPhase())
 		{
@@ -55,13 +62,76 @@ final class BatchPanelOverlay extends OverlayPanel
 				renderProcessing(guidance);
 				break;
 			case COMPLETE:
-				addLine("Complete", "Deposit / reset", COMPLETE);
-				addLine("Potions", plugin.getPlan().size() + "/" + plugin.getPlan().size(), COMPLETE);
+				renderComplete();
 				break;
 			default:
 		}
+		renderOrders();
 		renderBatchInventory();
 		return super.render(graphics);
+	}
+
+	private void renderComplete()
+	{
+		DeliveryDecision decision = plugin.getDeliveryDecision();
+		switch (decision.getKind())
+		{
+			case DELIVER:
+				addLine("Deliver", decision.getFillable() + " order" + (decision.getFillable() == 1 ? "" : "s") + " ready", COMPLETE);
+				break;
+			case REFILL:
+				addLine("Refill", decision.getFillable() + "/" + decision.getRequired() + " orders ready", EXTRA);
+				break;
+			case WASTE:
+				addLine("No order ready", "Deposit wastes", ERROR);
+				addLine(
+					"Slot " + (decision.getWastedSlot() + 1),
+					decision.getWastedPotion().name(),
+					ERROR);
+				break;
+			default:
+				addLine("Complete", "Deposit / reset", COMPLETE);
+				addLine("Potions", plugin.getPlan().size() + "/" + plugin.getPlan().size(), COMPLETE);
+		}
+	}
+
+	private void renderOrders()
+	{
+		OrderMatch match = plugin.getOrderMatch();
+		if (!config.useCurrentOrders() || match.getOrders().isEmpty())
+		{
+			return;
+		}
+
+		panelComponent.getChildren().add(TitleComponent.builder().text("Orders").build());
+		DeliveryDecision decision = plugin.getDeliveryDecision();
+		if (decision.getKind() != DeliveryDecision.Kind.UNKNOWN)
+		{
+			addLine(
+				"Ready",
+				decision.getFillable() + " (need " + decision.getRequired() + ")",
+				decision.getKind() == DeliveryDecision.Kind.DELIVER ? COMPLETE : EXTRA);
+		}
+		int unbrewable = plugin.getUnbrewableOrderCount();
+		if (unbrewable > 0)
+		{
+			addLine("No room", unbrewable + " order potion" + (unbrewable == 1 ? "" : "s") + " not brewed", ERROR);
+		}
+		for (int index = 0; index < match.getOrders().size(); index++)
+		{
+			PotionOrder order = match.getOrders().get(index);
+			if (order == null)
+			{
+				addLine("?", "Unknown", EMPTY);
+				continue;
+			}
+			boolean fillable = match.isFillable(index);
+			addLine(
+				order.getPotion().name() + "  " + order.getStation().getObjectName(),
+				fillable ? "Ready"
+					: config.skipOrderPotions().contains(order.getPotion()) ? "Skipped" : "Missing",
+				fillable ? COMPLETE : EMPTY);
+		}
 	}
 
 	private void renderMixing(Guidance guidance)
@@ -71,6 +141,10 @@ final class BatchPanelOverlay extends OverlayPanel
 		addLine(entry.getPotion().name(), entry.getPotion().getDisplayName(), Color.WHITE);
 		addLine("Recipe", entry.getPotion().getRecipeSequence(), Color.WHITE);
 		addLine("Later", "#" + (entry.getStationOrdinal() + 1) + " " + entry.getStation().getObjectName(), config.stationColor());
+		if (entry.isOrderPotion())
+		{
+			addLine("For order", entry.getPotion().name() + "  " + entry.getStation().getObjectName(), COMPLETE);
+		}
 	}
 
 	private void renderProcessing(Guidance guidance)
@@ -79,7 +153,17 @@ final class BatchPanelOverlay extends OverlayPanel
 		addLine("Station batch", (entry.getStationOrdinal() + 1) + "/3", config.stationColor());
 		addLine(entry.getStation().getObjectName(), entry.getStation().getActionName(), config.stationColor());
 		addLine("Potion", (entry.getStationPosition() + 1) + "/" + entry.getStationTotal() + "  " + entry.getPotion().name(), Color.WHITE);
-		addLine("NEXT", guidance.getAction() == Guidance.Action.WAIT_STATION ? "Processing" : "Use station", config.stationColor());
+		switch (guidance.getAction())
+		{
+			case WAIT_STATION:
+				addLine("NEXT", "Processing", config.stationColor());
+				break;
+			case USE_ITEM_ON_STATION:
+				addLine("NEXT", "Use slot " + (entry.getInventorySlot() + 1) + " on " + entry.getStation().getObjectName(), config.stationColor());
+				break;
+			default:
+				addLine("NEXT", "Use station", config.stationColor());
+		}
 	}
 
 	private void renderBatchInventory()

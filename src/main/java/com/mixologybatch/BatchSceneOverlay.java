@@ -18,10 +18,13 @@ final class BatchSceneOverlay extends Overlay
 {
 	private static final Color VESSEL_COLOR = Color.WHITE;
 	private static final Color COMPLETE_COLOR = new Color(0, 255, 90);
+	private static final Color WASTE_COLOR = new Color(255, 140, 0);
 	private static final Color NEXT_RECIPE_COLOR = new Color(150, 150, 150);
 	private static final int MARKER_OFFSET = -22;
 	private static final int CURRENT_RECIPE_OFFSET = 0;
 	private static final int NEXT_RECIPE_OFFSET = 20;
+	// Lifts station labels clear of the game's progress bar above the machine.
+	private static final int STATION_LABEL_OFFSET = -20;
 
 	private final Client client;
 	private final MixologyBatchPlugin plugin;
@@ -55,6 +58,8 @@ final class BatchSceneOverlay extends Overlay
 		}
 
 		Guidance guidance = plugin.getGuidance();
+		renderQuickActions(guidance);
+		renderDigweed(graphics);
 		if (guidance.getPhase() == Guidance.Phase.MIXING)
 		{
 			renderMixingRecipe(
@@ -72,18 +77,39 @@ final class BatchSceneOverlay extends Overlay
 		{
 			case USE_STATION:
 				target = guidance.getEntry().getStation().getLabObject();
-				color = config.stationColor();
+				color = stationColor(guidance.getEntry().getStation());
 				label = stationLabel(guidance.getEntry(), false);
+				break;
+			case USE_ITEM_ON_STATION:
+				target = guidance.getEntry().getStation().getLabObject();
+				color = stationColor(guidance.getEntry().getStation());
+				label = "USE SLOT " + (guidance.getEntry().getInventorySlot() + 1);
 				break;
 			case WAIT_STATION:
 				target = guidance.getEntry().getStation().getLabObject();
-				color = config.stationColor();
+				color = stationColor(guidance.getEntry().getStation());
 				label = stationLabel(guidance.getEntry(), true);
 				break;
 			case DEPOSIT:
+				DeliveryDecision decision = plugin.getDeliveryDecision();
 				target = LabObject.CONVEYOR;
-				color = COMPLETE_COLOR;
-				label = "BATCH READY";
+				switch (decision.getKind())
+				{
+					case REFILL:
+						// Too few orders are fillable: the conveyor is deliberately not highlighted.
+						return null;
+					case WASTE:
+						color = WASTE_COLOR;
+						label = "WASTES " + decision.getWastedPotion().name();
+						break;
+					case DELIVER:
+						color = COMPLETE_COLOR;
+						label = "DELIVER " + decision.getFillable();
+						break;
+					default:
+						color = COMPLETE_COLOR;
+						label = "BATCH READY";
+				}
 				break;
 			default:
 				return null;
@@ -91,6 +117,54 @@ final class BatchSceneOverlay extends Overlay
 
 		drawTarget(graphics, target, label, color);
 		return null;
+	}
+
+	/**
+	 * Outlines stations with an open quick-action window that are not already the
+	 * guided target; the guided target switches its own outline colour instead.
+	 */
+	private void renderQuickActions(Guidance guidance)
+	{
+		for (Station station : Station.values())
+		{
+			if (!plugin.isQuickActionOpen(station) || isGuidedStation(guidance, station))
+			{
+				continue;
+			}
+			TileObject object = objects.find(station.getLabObject());
+			if (object != null)
+			{
+				outliner.drawOutline(
+					object,
+					config.outlineWidth(),
+					config.quickActionColor(),
+					config.outlineFeather());
+			}
+		}
+	}
+
+	private void renderDigweed(Graphics2D graphics)
+	{
+		if (!config.highlightDigweed())
+		{
+			return;
+		}
+		for (DigweedSpot spot : plugin.getReadyDigweed())
+		{
+			drawTarget(graphics, spot.getLabObject(), "DIGWEED", config.digweedColor());
+		}
+	}
+
+	private static boolean isGuidedStation(Guidance guidance, Station station)
+	{
+		return guidance.targetsStation()
+			&& guidance.getEntry() != null
+			&& guidance.getEntry().getStation() == station;
+	}
+
+	private Color stationColor(Station station)
+	{
+		return plugin.isQuickActionOpen(station) ? config.quickActionColor() : config.stationColor();
 	}
 
 	private void renderPermanentLeverMarkers(Graphics2D graphics)
@@ -183,7 +257,19 @@ final class BatchSceneOverlay extends Overlay
 			return;
 		}
 		outliner.drawOutline(object, config.outlineWidth(), color, config.outlineFeather());
-		drawLabel(graphics, object, label, color, 0);
+		drawLabel(graphics, object, label, color, isStation(target) ? STATION_LABEL_OFFSET : 0);
+	}
+
+	private static boolean isStation(LabObject object)
+	{
+		for (Station station : Station.values())
+		{
+			if (station.getLabObject() == object)
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private static String stationLabel(BatchEntry entry, boolean active)
